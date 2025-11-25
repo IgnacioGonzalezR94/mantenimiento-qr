@@ -128,14 +128,9 @@ def seed_data():
     print("✅ Datos iniciales cargados (seed_data)")
 
 
-@app.before_first_request
-def setup_db():
-    """
-    Esto se ejecuta la primera vez que llega una petición HTTP.
-    Sirve para Render (gunicorn), donde no se ejecuta el bloque __main__.
-    """
-    init_db()
-    seed_data()
+# 🔴 INICIALIZAR BD AL IMPORTAR EL MÓDULO (sirve para Render y local)
+init_db()
+seed_data()
 
 
 # -----------------------------------------
