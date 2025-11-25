@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>{{ section['name'] }} - Mantenimiento</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1 { color: #004070; }
+        a { color: #0066cc; text-decoration: none; font-weight: bold; }
+        a:hover { text-decoration: underline; }
+        .card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>{{ section['name'] }}</h1>
+    <p><b>Código:</b> {{ section['code'] }}</p>
+
+    <p>
+        <a href="{{ url_for('new_work_order', section_code=section['code']) }}">
+            ➕ Registrar nuevo mantenimiento
+        </a>
+    </p>
+
+    <h2>Últimos mantenimientos</h2>
+
+    {% if work_orders|length == 0 %}
+        <p>No hay mantenimientos registrados aún.</p>
+    {% endif %}
+
+    {% for w in work_orders %}
+        <div class="card">
+            <p><b>Fecha:</b> {{ w['date'] }}</p>
+            <p><b>Técnico:</b> {{ w['technician_name'] or 'No registrado' }}</p>
+            <p><b>Tipo:</b> {{ w['type'] or 'N/D' }}</p>
+            <p><b>Descripción:</b> {{ w['description'] }}</p>
+            <p>
+                <b>Línea detenida:</b> {{ 'Sí' if w['machine_stopped'] else 'No' }}<br>
+                <b>Minutos de parada:</b> {{ w['downtime_min'] or 0 }}
+            </p>
+        </div>
+    {% endfor %}
+
+    <p>
+        <a href="{{ url_for('index') }}">⬅ Volver</a>
+    </p>
+
+</body>
+</html>
