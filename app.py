@@ -128,6 +128,16 @@ def seed_data():
     print("✅ Datos iniciales cargados (seed_data)")
 
 
+@app.before_first_request
+def setup_db():
+    """
+    Esto se ejecuta la primera vez que llega una petición HTTP.
+    Sirve para Render (gunicorn), donde no se ejecuta el bloque __main__.
+    """
+    init_db()
+    seed_data()
+
+
 # -----------------------------------------
 #  RUTAS PRINCIPALES
 # -----------------------------------------
@@ -254,9 +264,10 @@ def uploaded_file(filename):
 
 
 # -----------------------------------------
-#  EJECUCIÓN
+#  EJECUCIÓN LOCAL
 # -----------------------------------------
 if __name__ == '__main__':
+    # Para cuando lo corres en tu PC con: py app.py
     init_db()
     seed_data()
     app.run(host='0.0.0.0', port=5000, debug=True)
