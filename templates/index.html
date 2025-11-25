@@ -1,1 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Secciones - Mantenimiento</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1 { color: #004070; }
+        ul { list-style: none; padding: 0; }
+        li { margin-bottom: 10px; }
+        a { font-size: 18px; text-decoration: none; color: #0066cc; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Secciones de la máquina</h1>
+    <p>Selecciona una sección para ver o agregar mantenimientos:</p>
+
+    <ul>
+        {% for s in sections %}
+            <li>
+                <a href="{{ url_for('section_view', section_code=s['code']) }}">
+                    {{ s['name'] }} ({{ s['code'] }})
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
 
