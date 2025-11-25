@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Nuevo mantenimiento - {{ section['name'] }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1 { color: #004070; }
+        label { font-weight: bold; display: block; margin-top: 10px; }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            margin-top: 15px;
+            background: #0074cc;
+            color: white;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005c99;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Registrar mantenimiento en {{ section['name'] }}</h1>
+
+    <form method="post" enctype="multipart/form-data">
+
+        <label>Técnico:</label>
+        <select name="technician_id">
+            <option value="">(sin técnico)</option>
+            {% for t in technicians %}
+                <option value="{{ t['id'] }}">{{ t['name'] }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Tipo de trabajo:</label>
+        <input type="text" name="type" placeholder="correctivo, preventivo, ajuste...">
+
+        <label>Descripción detallada del trabajo:</label>
+        <textarea name="description" rows="5" required></textarea>
+
+        <label>¿Se detuvo la línea?</label>
+        <input type="checkbox" name="machine_stopped">
+
+        <label>Minutos de parada:</label>
+        <input type="number" name="downtime_min" min="0" value="0">
+
+        <label>Adjuntar fotos o videos (puedes seleccionar varios):</label>
+        <input type="file" name="attachments" multiple>
+
+        <button type="submit">Guardar mantenimiento</button>
+    </form>
+
+    <p style="margin-top: 15px;">
+        <a href="{{ url_for('section_view', section_code=section['code']) }}">⬅ Volver</a>
+    </p>
+
+</body>
+</html>
