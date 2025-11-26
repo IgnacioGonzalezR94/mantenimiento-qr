@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Editar máquina / sección</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            margin-top: 15px;
+            background: #0b6fa4;
+            color: white;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background: #084d73; }
+        .read-only {
+            background: #eee;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>✏ Editar máquina / sección</h1>
+
+    <form method="post">
+        <label>Código (no se puede cambiar):</label>
+        <input type="text" value="{{ section['code'] }}" class="read-only" disabled>
+
+        <label>Nombre visible:</label>
+        <input type="text" name="name" value="{{ section['name'] }}" required>
+
+        <label>Descripción:</label>
+        <textarea name="description" rows="4">{{ section['description'] or '' }}</textarea>
+
+        <button type="submit">Guardar cambios</button>
+    </form>
+
+    <p><a href="{{ url_for('admin_sections') }}">⬅ Volver a la lista de máquinas</a></p>
+
+</body>
+</html>
