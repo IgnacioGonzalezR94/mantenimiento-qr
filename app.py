@@ -456,6 +456,67 @@ def admin_components(section_code):
         components=components
     )
 
+@app.route('/admin/sections', methods=['GET', 'POST'])
+@admin_required
+def admin_sections():
+    """Gestionar máquinas/secciones: agregar nuevas y ver las existentes."""
+    conn = get_db()
+    cur = conn.cursor()
+
+    if request.method == 'POST':
+        code = (request.form.get('code') or "").strip().upper()
+        name = (request.form.get('name') or "").strip()
+        description = (request.form.get('description') or "").strip()
+
+        if code and name:
+            # Intentar crear una nueva sección
+            cur.execute("""
+                INSERT OR IGNORE INTO sections (code, name, description)
+                VALUES (?, ?, ?)
+            """, (code, name, description))
+            conn.commit()
+
+    sections = cur.execute(
+        "SELECT * FROM sections ORDER BY name;"
+    ).fetchall()
+
+    conn.close()
+    return render_template('admin_sections.html', sections=sections)
+
+
+@app.route('/admin/sections/<int:section_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_section(section_id):
+    """Editar una máquina/sección existente (nombre y descripción)."""
+    conn = get_db()
+    cur = conn.cursor()
+
+    section = cur.execute(
+        "SELECT * FROM sections WHERE id = ?;",
+        (section_id,)
+    ).fetchone()
+
+    if not section:
+        conn.close()
+        return f"Sección no encontrada (ID {section_id})", 404
+
+    if request.method == 'POST':
+        name = (request.form.get('name') or "").strip()
+        description = (request.form.get('description') or "").strip()
+
+        if name:
+            cur.execute("""
+                UPDATE sections
+                SET name = ?, description = ?
+                WHERE id = ?
+            """, (name, description, section_id))
+            conn.commit()
+            conn.close()
+            return redirect(url_for('admin_sections'))
+
+    conn.close()
+    return render_template('admin_edit_section.html', section=section)
+
 
 @app.route('/admin/issues')
 @admin_required
@@ -560,3 +621,4 @@ if __name__ == '__main__':
     init_db()
     seed_data()
     app.run(host='0.0.0.0', port=5000, debug=True)
+
