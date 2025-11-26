@@ -232,7 +232,7 @@ def admin_required(f):
 #  PORTAL PRINCIPAL (QR UNIVERSAL)
 # -----------------------------------------
 @app.route('/', endpoint='index')
-def home_portal():
+def index():
     """
     Portal principal del QR universal.
     Muestra los 7 botones: técnico, visualización, otros, informe,
@@ -999,4 +999,5 @@ if __name__ == '__main__':
     init_db()
     seed_data()
     app.run(host='0.0.0.0', port=5000, debug=True)
+
 
