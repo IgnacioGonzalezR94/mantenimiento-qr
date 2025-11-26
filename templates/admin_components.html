@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Subpartes - {{ section['name'] }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button {
+            margin-top: 10px;
+            background: #0b6fa4;
+            color: white;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background: #084d73; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #dde3ed; padding: 8px; text-align: left; }
+        th { background: #eef2fb; }
+        .inactive { color: #999; }
+    </style>
+</head>
+<body>
+
+    <h1>🔩 Subpartes de {{ section['name'] }} ({{ section['code'] }})</h1>
+    <p>Aquí defines las opciones que le aparecerán al técnico en el campo “Parte específica de esta sección”.</p>
+
+    <h2>Agregar nueva subparte</h2>
+    <form method="post">
+        <label>Nombre de la subparte / componente:</label>
+        <input type="text" name="name" placeholder="Ej: Motor derecho, sensor entrada, banda 1..." required>
+        <button type="submit">Agregar</button>
+    </form>
+
+    <h2>Listado de subpartes</h2>
+    <table>
+        <tr>
+            <th>Nombre</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+        </tr>
+        {% for c in components %}
+            <tr>
+                <td class="{% if not c['active'] %}inactive{% endif %}">
+                    {{ c['name'] }}
+                </td>
+                <td>
+                    {% if c['active'] %}Activa{% else %}Inactiva{% endif %}
+                </td>
+                <td>
+                    {% if c['active'] %}
+                        <a href="{{ url_for('admin_components', section_code=section['code'], deactivate_id=c['id']) }}">Desactivar</a>
+                    {% else %}
+                        (desactivada)
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <p><a href="{{ url_for('admin_home') }}">⬅ Volver al panel admin</a></p>
+
+</body>
+</html>
