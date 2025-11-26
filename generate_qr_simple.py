@@ -1,10 +1,8 @@
 import qrcode
 
-# ⚠️ CAMBIA ESTA IP POR LA DE TU PC ⚠️
-# Usa la misma IP que usas para entrar desde el navegador en el celular.
-BASE_URL = "http://172.23.4.31:5000/m/"  # ejemplo, cámbiala
+# ⚠️ USA TU URL ONLINE DE RENDER
+BASE_URL = "https://mantenimiento-qr-pyck.onrender.com/"
 
-# Lista fija de secciones (códigos deben coincidir con los de la app)
 sections = [
     ("VOLCADOR", "Volcador"),
     ("ELEVADOR", "Elevador de fruta"),
@@ -26,4 +24,4 @@ for code, name in sections:
     img.save(filename)
     print(f"✅ QR generado para {name} ({code}): {filename} -> {url}")
 
-print("✅ Listo. Los archivos PNG están en esta misma carpeta.")
+print("🚀 Listo. Los QR están en esta misma carpeta.")
