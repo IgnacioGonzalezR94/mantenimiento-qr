@@ -16,40 +16,41 @@
             background: #ffffff;
         }
         .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #e3f2fd; margin-right: 5px; }
+        .files { font-size: 12px; margin-top: 8px; }
     </style>
 </head>
 <body>
 
     <h1>🔧 {{ section['name'] }}</h1>
-    <p><b>Código QR:</b> {{ section['code'] }}</p>
+    <p><b>Código:</b> {{ section['code'] }}</p>
 
     <p>
         <a href="{{ url_for('new_work_order', section_code=section['code']) }}">
-            ➕ Registrar nuevo mantenimiento
+            ➕ Registrar nuevo mantenimiento (modo técnico)
         </a>
     </p>
 
     <h2>📜 Historial reciente</h2>
 
     {% if work_orders|length == 0 %}
-        <p>Aún no hay mantenimientos registrados en esta sección.</p>
+        <p>Aún no hay registros en esta sección.</p>
     {% endif %}
 
     {% for w in work_orders %}
         <div class="card">
             <p><b>Fecha:</b> {{ w['date'] }}</p>
             <p><b>Técnico:</b> {{ w['technician_name'] or 'No registrado' }}</p>
+
             <p>
                 {% if w['type'] %}
-                    <span class="tag">
-                        {{ w['type'] }}
-                    </span>
+                    <span class="tag">{{ w['type'] }}</span>
                 {% endif %}
-
+                {% if w['failure_type'] %}
+                    <span class="tag">Falla: {{ w['failure_type'] }}</span>
+                {% endif %}
                 {% if w['component'] %}
                     <span class="tag">Parte: {{ w['component'] }}</span>
                 {% endif %}
-
                 {% if w['type'] == 'Aviso de desperfecto' %}
                     {% if w['resolved'] %}
                         <span class="tag" style="background:#c8e6c9;">✅ Desperfecto resuelto</span>
@@ -58,20 +59,39 @@
                     {% endif %}
                 {% endif %}
             </p>
+
             <p><b>Descripción:</b> {{ w['description'] }}</p>
+
             <p>
                 <b>Línea detenida:</b> {{ 'Sí' if w['machine_stopped'] else 'No' }}<br>
                 <b>Minutos de parada:</b> {{ w['downtime_min'] or 0 }}
             </p>
+
             {% if w['resolution_description'] %}
                 <p><b>Cómo se resolvió:</b> {{ w['resolution_description'] }}</p>
                 <p><b>Resuelto en:</b> {{ w['resolution_at'] or '-' }}</p>
+            {% endif %}
+
+            {% set files = attachments_by_work.get(w['id'], []) %}
+            {% if files %}
+                <div class="files">
+                    <b>Adjuntos:</b>
+                    <ul>
+                        {% for f in files %}
+                            <li>
+                                <a href="{{ url_for('uploaded_file', filename=f['filename']) }}" target="_blank">
+                                    {{ f['filename'] }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             {% endif %}
         </div>
     {% endfor %}
 
     <p>
-        <a href="{{ url_for('index') }}">⬅ Volver al inicio</a>
+        <a href="{{ url_for('home_portal') }}">⬅ Volver al portal</a>
     </p>
 
 </body>
