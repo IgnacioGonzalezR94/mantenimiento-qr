@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Resolver aviso</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        textarea, input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button {
+            margin-top: 15px;
+            background: #0b6fa4;
+            color: white;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background: #084d73; }
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #dde3ed;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>✅ Resolver aviso de desperfecto</h1>
+
+    <div class="card">
+        <p><b>Sección:</b> {{ issue['section_name'] }} (ID sección: {{ issue['section_id'] }})</p>
+        <p><b>Parte:</b> {{ issue['component'] or '-' }}</p>
+        <p><b>Técnico que avisó:</b> {{ issue['technician_name'] or '-' }}</p>
+        <p><b>Descripción del aviso:</b> {{ issue['description'] }}</p>
+        <p><b>Fecha del aviso:</b> {{ issue['date'] }}</p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        <label>Describe cómo se solucionó:</label>
+        <textarea name="resolution_description" rows="5" required></textarea>
+
+        <label>Subir evidencia (fotos / videos):</label>
+        <input type="file" name="attachments" multiple>
+
+        <button type="submit">Marcar como resuelto</button>
+    </form>
+
+    <p><a href="{{ url_for('admin_issues') }}">⬅ Volver a la lista de avisos</a></p>
+
+</body>
+</html>
