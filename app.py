@@ -14,82 +14,82 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# Clave de sesión (cámbiala en producción)
+# Clave para sesiones (modo admin). Cámbiala por algo tuyo.
 app.secret_key = os.environ.get("SECRET_KEY", "cambia-esta-clave-super-secreta")
 
-# Contraseña admin (puedes ponerla como variable de entorno en Render)
+# Contraseña del modo admin (para /admin). Cámbiala también.
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1234")
 
-UPLOAD_FOLDER = "uploads"
+# Carpeta donde se guardan fotos y videos
+UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-DATABASE = "db.sqlite3"
+# Archivo de la base de datos
+DATABASE = 'db.sqlite3'
 
 
-# -------------------- BD --------------------
+# -----------------------------------------
+#  FUNCIONES BASE DE DATOS
+# -----------------------------------------
 def get_db():
+    """Devuelve una conexión a la base de datos."""
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
+    """Crea las tablas si no existen y asegura columnas nuevas."""
     conn = get_db()
     cur = conn.cursor()
 
-    # Secciones / máquinas
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sections (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            description TEXT
-        );
-        """
-    )
+    # Tabla de secciones (máquinas / secciones que tendrán QR o se seleccionan)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT
+    );
+    """)
 
-    # Técnicos
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS technicians (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            role TEXT,
-            active INTEGER DEFAULT 1
-        );
-        """
-    )
+    # Tabla de técnicos
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS technicians (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        role TEXT,
+        active INTEGER DEFAULT 1
+    );
+    """)
 
-    # Órdenes de trabajo
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS work_orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            section_id INTEGER NOT NULL,
-            technician_id INTEGER,
-            date TEXT NOT NULL,
-            type TEXT,
-            failure_type TEXT,
-            component TEXT,
-            description TEXT NOT NULL,
-            downtime_min INTEGER,
-            machine_stopped INTEGER,
-            created_at TEXT NOT NULL,
-            resolved INTEGER DEFAULT 0,
-            resolution_description TEXT,
-            resolution_at TEXT,
-            FOREIGN KEY(section_id) REFERENCES sections(id),
-            FOREIGN KEY(technician_id) REFERENCES technicians(id)
-        );
-        """
-    )
+    # Tabla de órdenes de trabajo (mantenimientos y avisos)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS work_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        section_id INTEGER NOT NULL,
+        technician_id INTEGER,
+        date TEXT NOT NULL,
+        type TEXT,               -- tipo de trabajo (preventivo, correctivo, aviso)
+        component TEXT,          -- subparte / componente
+        failure_type TEXT,       -- tipo de falla (mecánica, eléctrica, etc.)
+        description TEXT NOT NULL,
+        downtime_min INTEGER,
+        machine_stopped INTEGER,
+        created_at TEXT NOT NULL,
+        resolved INTEGER DEFAULT 0,
+        resolution_description TEXT,
+        resolution_at TEXT,
+        FOREIGN KEY(section_id) REFERENCES sections(id),
+        FOREIGN KEY(technician_id) REFERENCES technicians(id)
+    );
+    """)
 
-    # Por si la tabla ya existía y le faltan columnas nuevas
+    # Asegurar columnas nuevas por si la tabla ya existía con menos campos
     alter_statements = [
-        "ALTER TABLE work_orders ADD COLUMN failure_type TEXT;",
         "ALTER TABLE work_orders ADD COLUMN component TEXT;",
+        "ALTER TABLE work_orders ADD COLUMN failure_type TEXT;",
         "ALTER TABLE work_orders ADD COLUMN resolved INTEGER DEFAULT 0;",
         "ALTER TABLE work_orders ADD COLUMN resolution_description TEXT;",
         "ALTER TABLE work_orders ADD COLUMN resolution_at TEXT;",
@@ -98,45 +98,42 @@ def init_db():
         try:
             cur.execute(stmt)
         except sqlite3.OperationalError:
-            # columna ya existe
+            # La columna ya existe: ignorar
             pass
 
-    # Subpartes / componentes configurables
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS components (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            section_code TEXT NOT NULL,
-            name TEXT NOT NULL,
-            active INTEGER DEFAULT 1
-        );
-        """
-    )
+    # Tabla de subpartes / componentes configurables por sección
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS components (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        section_code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        active INTEGER DEFAULT 1
+    );
+    """)
 
-    # Adjuntos (fotos / videos)
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS attachments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            work_order_id INTEGER NOT NULL,
-            filename TEXT NOT NULL,
-            mime_type TEXT,
-            path TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(work_order_id) REFERENCES work_orders(id)
-        );
-        """
-    )
+    # Tabla de archivos adjuntos
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS attachments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        work_order_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        mime_type TEXT,
+        path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(work_order_id) REFERENCES work_orders(id)
+    );
+    """)
 
     conn.commit()
     conn.close()
 
 
 def seed_data():
-    """Datos iniciales básicos (si no existen)."""
+    """Inserta secciones y técnicos iniciales si no existen."""
     conn = get_db()
     cur = conn.cursor()
 
+    # Secciones de ejemplo (puedes luego editarlas en el panel admin)
     sections = [
         ("VOLCADOR", "Volcador", "Volcador de fruta / bins"),
         ("ELEVADOR", "Elevador de fruta", "Elevador desde volcador a acumulación"),
@@ -150,106 +147,127 @@ def seed_data():
     ]
 
     for code, name, desc in sections:
-        cur.execute(
-            """
+        cur.execute("""
             INSERT OR IGNORE INTO sections (code, name, description)
             VALUES (?, ?, ?)
-            """,
-            (code, name, desc),
-        )
+        """, (code, name, desc))
 
+    # Técnicos iniciales (puedes cambiar estos nombres por los de tu equipo)
     technicians = [
         ("Walker", "Técnico"),
         ("Jose", "Técnico"),
         ("Ignacio", "Jefe de línea"),
     ]
+
     for name, role in technicians:
         cur.execute("SELECT id FROM technicians WHERE name = ?;", (name,))
-        if cur.fetchone() is None:
-            cur.execute(
-                """
+        row = cur.fetchone()
+        if row is None:
+            cur.execute("""
                 INSERT INTO technicians (name, role, active)
                 VALUES (?, ?, 1)
-                """,
-                (name, role),
-            )
+            """, (name, role))
 
     conn.commit()
     conn.close()
+    print("✅ Datos iniciales cargados (seed_data)")
 
 
-# Inicializar (local y en Render)
+# Inicializar BD al cargar el módulo (sirve local y en Render)
 init_db()
 seed_data()
 
 
-# -------------------- Decorador admin --------------------
+# -----------------------------------------
+#  DECORADOR PARA MODO ADMIN
+# -----------------------------------------
 def admin_required(f):
     @wraps(f)
-    def wrapper(*args, **kwargs):
+    def decorated_function(*args, **kwargs):
         if not session.get("is_admin"):
             return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
+    return decorated_function
 
-    return wrapper
 
-
-# -------------------- Modo técnico / página principal --------------------
-@app.route("/")
+# -----------------------------------------
+#  PORTAL PRINCIPAL (QR universal)
+# -----------------------------------------
+@app.route('/')
 def index():
-    """Página de inicio: lista secciones/máquinas (modo técnico simple)."""
+    """
+    Portal de inicio: un solo QR universal apunta aquí.
+    Desde aquí se eligen los modos:
+    - Modo técnico
+    - Modo visualización
+    - Modo otros
+    - Modo informe
+    - Perfil técnico
+    - Admin
+    - Modo ayuda
+    """
+    return render_template('portal.html')
+
+
+# -----------------------------------------
+#  MODO TÉCNICO / VISUALIZACIÓN (LISTA DE MÁQUINAS)
+# -----------------------------------------
+@app.route('/modo/tecnico')
+def tecnico_home():
+    """Lista de secciones para que el técnico elija la máquina y registre mantenimiento."""
     conn = get_db()
     sections = conn.execute("SELECT * FROM sections ORDER BY name;").fetchall()
     conn.close()
-
-    if not sections:
-        init_db()
-        seed_data()
-        conn = get_db()
-        sections = conn.execute("SELECT * FROM sections ORDER BY name;").fetchall()
-        conn.close()
-
-    return render_template("index.html", sections=sections)
+    return render_template('sections_mode.html', sections=sections, mode="tecnico")
 
 
-@app.route("/m/<section_code>")
+@app.route('/modo/visualizacion')
+def visualizacion_home():
+    """Lista de secciones para ver el historial de cada máquina."""
+    conn = get_db()
+    sections = conn.execute("SELECT * FROM sections ORDER BY name;").fetchall()
+    conn.close()
+    return render_template('sections_mode.html', sections=sections, mode="visualizacion")
+
+
+# -----------------------------------------
+#  RUTAS PARA TRABAJAR SOBRE UNA SECCIÓN
+# -----------------------------------------
+@app.route('/m/<section_code>')
 def section_view(section_code):
-    """Historial de una sección."""
+    """Vista de una sección específica (historial de mantenimientos y avisos)."""
     conn = get_db()
     section = conn.execute(
-        "SELECT * FROM sections WHERE code = ?;", (section_code,)
+        "SELECT * FROM sections WHERE code = ?;",
+        (section_code,)
     ).fetchone()
+
     if not section:
         conn.close()
         return f"Sección no encontrada: {section_code}", 404
 
-    work_orders = conn.execute(
-        """
+    work_orders = conn.execute("""
         SELECT w.*, t.name as technician_name
         FROM work_orders w
         LEFT JOIN technicians t ON w.technician_id = t.id
         WHERE w.section_id = ?
         ORDER BY w.date DESC
         LIMIT 50;
-        """,
-        (section["id"],),
-    ).fetchall()
+    """, (section['id'],)).fetchall()
+
     conn.close()
-
-    return render_template(
-        "section.html",
-        section=section,
-        work_orders=work_orders,
-    )
+    return render_template('section.html', section=section, work_orders=work_orders)
 
 
-@app.route("/m/<section_code>/nuevo", methods=["GET", "POST"])
+@app.route('/m/<section_code>/nuevo', methods=['GET', 'POST'])
 def new_work_order(section_code):
-    """Registrar nuevo mantenimiento / aviso en una sección."""
+    """Formulario para registrar un nuevo mantenimiento o aviso en una sección."""
     conn = get_db()
     section = conn.execute(
-        "SELECT * FROM sections WHERE code = ?;", (section_code,)
+        "SELECT * FROM sections WHERE code = ?;",
+        (section_code,)
     ).fetchone()
+
     if not section:
         conn.close()
         return f"Sección no encontrada: {section_code}", 404
@@ -257,291 +275,317 @@ def new_work_order(section_code):
     technicians = conn.execute(
         "SELECT * FROM technicians WHERE active = 1 ORDER BY name;"
     ).fetchall()
+
+    # Subpartes configurables de esta sección
     components = conn.execute(
         "SELECT * FROM components WHERE section_code = ? AND active = 1 ORDER BY name;",
-        (section_code,),
+        (section_code,)
     ).fetchall()
 
-    if request.method == "POST":
-        technician_id = request.form.get("technician_id") or None
-        type_work = request.form.get("type")
-        failure_type = request.form.get("failure_type") or None  # Tipo de falla
-        component = request.form.get("component") or None
-        description = request.form.get("description")
-        downtime_min = request.form.get("downtime_min") or 0
-        machine_stopped = 1 if request.form.get("machine_stopped") == "on" else 0
+    if request.method == 'POST':
+        technician_id = request.form.get('technician_id') or None
+        type_work = request.form.get('type')
+        component = request.form.get('component')  # subparte elegida
+        # aceptar tanto failure_type como tipo_falla, por si el template usa uno u otro
+        failure_type = request.form.get('failure_type') or request.form.get('tipo_falla')
+        description = request.form.get('description')
+        downtime_min = request.form.get('downtime_min') or 0
+        machine_stopped = 1 if request.form.get('machine_stopped') == 'on' else 0
 
-        # Aviso de desperfecto => pendiente; otros => resuelto por defecto
+        # Estado según tipo
         if type_work == "Aviso de desperfecto":
             resolved = 0
         else:
             resolved = 1
 
-        now = datetime.now().isoformat(timespec="minutes")
+        now = datetime.now().isoformat(timespec='minutes')
 
         cur = conn.cursor()
-        cur.execute(
-            """
+        cur.execute("""
             INSERT INTO work_orders
-            (section_id, technician_id, date, type, failure_type, component,
+            (section_id, technician_id, date, type, component, failure_type,
              description, downtime_min, machine_stopped, created_at, resolved)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                section["id"],
-                technician_id,
-                now,
-                type_work,
-                failure_type,
-                component,
-                description,
-                int(downtime_min),
-                machine_stopped,
-                now,
-                resolved,
-            ),
-        )
+        """, (
+            section['id'],
+            technician_id,
+            now,
+            type_work,
+            component,
+            failure_type,
+            description,
+            int(downtime_min),
+            machine_stopped,
+            now,
+            resolved
+        ))
         work_order_id = cur.lastrowid
 
-        # Adjuntos
-        files = request.files.getlist("attachments")
+        # Manejo de archivos adjuntos
+        files = request.files.getlist('attachments')
         for f in files:
             if f and f.filename:
                 filename = f.filename
-                save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
+                # Evitar sobrescribir archivos
                 base, ext = os.path.splitext(filename)
                 i = 1
                 while os.path.exists(save_path):
                     filename = f"{base}_{i}{ext}"
-                    save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     i += 1
 
                 f.save(save_path)
 
-                cur.execute(
-                    """
+                cur.execute("""
                     INSERT INTO attachments
                     (work_order_id, filename, mime_type, path, created_at)
                     VALUES (?,?,?,?,?)
-                    """,
-                    (work_order_id, filename, f.mimetype, save_path, now),
-                )
+                """, (work_order_id, filename, f.mimetype, save_path, now))
 
         conn.commit()
         conn.close()
-        return redirect(url_for("section_view", section_code=section_code))
+        return redirect(url_for('section_view', section_code=section_code))
 
     conn.close()
     return render_template(
-        "new_work_order.html",
+        'new_work_order.html',
         section=section,
         technicians=technicians,
-        components=components,
+        components=components
     )
 
 
-@app.route("/uploads/<path:filename>")
+@app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    """Servir archivos adjuntos (fotos / videos)."""
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    """Servir archivos subidos (fotos/videos)."""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
-# -------------------- Modo ADMIN --------------------
-@app.route("/admin/login", methods=["GET", "POST"])
+# -----------------------------------------
+#  MODOS EXTRA (OTROS, INFORME, PERFIL, AYUDA)
+#  De momento son vistas simples que podemos ir mejorando.
+# -----------------------------------------
+@app.route('/modo/otros')
+def modo_otros():
+    # Aquí más adelante podremos implementar solicitudes de repuestos
+    return render_template('modo_otros.html')
+
+
+@app.route('/modo/informe')
+def modo_informe():
+    # Aquí más adelante implementaremos filtros por rango de fechas y descarga en PDF
+    return render_template('modo_informe.html')
+
+
+@app.route('/modo/perfil-tecnico')
+def modo_perfil_tecnico():
+    # Aquí más adelante podemos mostrar trabajos por técnico
+    conn = get_db()
+    cur = conn.cursor()
+    technicians = cur.execute("SELECT * FROM technicians ORDER BY name;").fetchall()
+    conn.close()
+    return render_template('modo_perfil_tecnico.html', technicians=technicians)
+
+
+@app.route('/modo/ayuda', methods=['GET', 'POST'])
+def modo_ayuda():
+    # Cualquier persona puede subir una foto y describir un problema (tipo "ticket rápido")
+    mensaje = None
+    if request.method == 'POST':
+        descripcion = request.form.get('descripcion')
+        # Aquí podríamos guardar en una tabla "help_requests".
+        mensaje = "Tu solicitud de ayuda fue registrada (demo)."
+    return render_template('modo_ayuda.html', mensaje=mensaje)
+
+
+# -----------------------------------------
+#  MODO ADMINISTRADOR
+# -----------------------------------------
+@app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
+    """Pantalla de login para modo admin."""
     error = None
-    if request.method == "POST":
-        password = request.form.get("password")
+    if request.method == 'POST':
+        password = request.form.get('password')
         if password == ADMIN_PASSWORD:
-            session["is_admin"] = True
-            return redirect(url_for("admin_home"))
+            session['is_admin'] = True
+            return redirect(url_for('admin_home'))
         else:
             error = "Contraseña incorrecta."
-    return render_template("admin_login.html", error=error)
+
+    return render_template('admin_login.html', error=error)
 
 
-@app.route("/admin/logout")
+@app.route('/admin/logout')
 @admin_required
 def admin_logout():
-    session.pop("is_admin", None)
-    # IMPORTANTE: esta ruta existe y así evitamos el error 500
-    return redirect(url_for("index"))
+    """Salir del modo admin."""
+    session.pop('is_admin', None)
+    # Al salir, volvemos al portal principal (QR universal)
+    return redirect(url_for('index'))
 
 
-@app.route("/admin")
+@app.route('/admin')
 @admin_required
 def admin_home():
+    """Menú principal del modo administrador."""
     conn = get_db()
     sections = conn.execute("SELECT * FROM sections ORDER BY name;").fetchall()
-    technicians = conn.execute(
-        "SELECT * FROM technicians ORDER BY name;"
-    ).fetchall()
+    technicians = conn.execute("SELECT * FROM technicians ORDER BY name;").fetchall()
     conn.close()
-    return render_template(
-        "admin_home.html", sections=sections, technicians=technicians
-    )
+    return render_template('admin_home.html', sections=sections, technicians=technicians)
 
 
-@app.route("/admin/technicians", methods=["GET", "POST"])
+@app.route('/admin/technicians', methods=['GET', 'POST'])
 @admin_required
 def admin_technicians():
-    """Alta/baja de técnicos."""
+    """Alta / baja de técnicos."""
     conn = get_db()
     cur = conn.cursor()
 
-    deactivate_id = request.args.get("deactivate_id")
+    # Desactivar técnico (soft delete)
+    deactivate_id = request.args.get('deactivate_id')
     if deactivate_id:
-        cur.execute(
-            "UPDATE technicians SET active = 0 WHERE id = ?;",
-            (deactivate_id,),
-        )
+        cur.execute("UPDATE technicians SET active = 0 WHERE id = ?;", (deactivate_id,))
         conn.commit()
 
-    if request.method == "POST":
-        name = request.form.get("name")
-        role = request.form.get("role")
+    if request.method == 'POST':
+        name = request.form.get('name')
+        role = request.form.get('role')
         if name:
-            cur.execute(
-                """
+            cur.execute("""
                 INSERT INTO technicians (name, role, active)
                 VALUES (?, ?, 1)
-                """,
-                (name, role),
-            )
+            """, (name, role))
             conn.commit()
 
     technicians = cur.execute(
         "SELECT * FROM technicians ORDER BY active DESC, name;"
     ).fetchall()
     conn.close()
-    return render_template("admin_technicians.html", technicians=technicians)
+
+    return render_template('admin_technicians.html', technicians=technicians)
 
 
-@app.route("/admin/sections", methods=["GET", "POST"])
-@admin_required
-def admin_sections():
-    """Gestionar máquinas / secciones (agregar y listar)."""
-    conn = get_db()
-    cur = conn.cursor()
-
-    if request.method == "POST":
-        code = (request.form.get("code") or "").strip().upper()
-        name = (request.form.get("name") or "").strip()
-        description = (request.form.get("description") or "").strip()
-
-        if code and name:
-            cur.execute(
-                """
-                INSERT OR IGNORE INTO sections (code, name, description)
-                VALUES (?, ?, ?)
-                """,
-                (code, name, description),
-            )
-            conn.commit()
-
-    sections = cur.execute(
-        "SELECT * FROM sections ORDER BY name;"
-    ).fetchall()
-    conn.close()
-    return render_template("admin_sections.html", sections=sections)
-
-
-@app.route("/admin/sections/<int:section_id>/edit", methods=["GET", "POST"])
-@admin_required
-def admin_edit_section(section_id):
-    """Editar nombre/descripcion de una sección."""
-    conn = get_db()
-    cur = conn.cursor()
-
-    section = cur.execute(
-        "SELECT * FROM sections WHERE id = ?;", (section_id,)
-    ).fetchone()
-    if not section:
-        conn.close()
-        return f"Sección no encontrada (ID {section_id})", 404
-
-    if request.method == "POST":
-        name = (request.form.get("name") or "").strip()
-        description = (request.form.get("description") or "").strip()
-
-        if name:
-            cur.execute(
-                """
-                UPDATE sections
-                SET name = ?, description = ?
-                WHERE id = ?
-                """,
-                (name, description, section_id),
-            )
-            conn.commit()
-            conn.close()
-            return redirect(url_for("admin_sections"))
-
-    conn.close()
-    return render_template("admin_edit_section.html", section=section)
-
-
-@app.route("/admin/components/<section_code>", methods=["GET", "POST"])
+@app.route('/admin/components/<section_code>', methods=['GET', 'POST'])
 @admin_required
 def admin_components(section_code):
-    """Configurar subpartes de una sección."""
+    """Configurar subpartes de una sección (sub-clasificaciones del QR)."""
     conn = get_db()
     cur = conn.cursor()
 
     section = cur.execute(
-        "SELECT * FROM sections WHERE code = ?;", (section_code,)
+        "SELECT * FROM sections WHERE code = ?;",
+        (section_code,)
     ).fetchone()
     if not section:
         conn.close()
         return f"Sección no encontrada: {section_code}", 404
 
-    deactivate_id = request.args.get("deactivate_id")
+    # Desactivar subparte
+    deactivate_id = request.args.get('deactivate_id')
     if deactivate_id:
         cur.execute(
             "UPDATE components SET active = 0 WHERE id = ?;",
-            (deactivate_id,),
+            (deactivate_id,)
         )
         conn.commit()
 
-    if request.method == "POST":
-        name = request.form.get("name")
+    if request.method == 'POST':
+        name = request.form.get('name')
         if name:
-            cur.execute(
-                """
+            cur.execute("""
                 INSERT INTO components (section_code, name, active)
                 VALUES (?, ?, 1)
-                """,
-                (section_code, name),
-            )
+            """, (section_code, name))
             conn.commit()
 
-    components = cur.execute(
-        """
+    components = cur.execute("""
         SELECT * FROM components
         WHERE section_code = ?
         ORDER BY active DESC, name;
-        """,
-        (section_code,),
-    ).fetchall()
+    """, (section_code,)).fetchall()
 
     conn.close()
     return render_template(
-        "admin_components.html",
+        'admin_components.html',
         section=section,
-        components=components,
+        components=components
     )
 
 
-@app.route("/admin/issues")
+@app.route('/admin/sections', methods=['GET', 'POST'])
 @admin_required
-def admin_issues():
-    """Avisos de desperfecto: pendientes y resueltos."""
+def admin_sections():
+    """Gestionar máquinas/secciones: agregar nuevas y ver las existentes."""
     conn = get_db()
     cur = conn.cursor()
 
-    pendientes = cur.execute(
-        """
+    if request.method == 'POST':
+        code = (request.form.get('code') or "").strip().upper()
+        name = (request.form.get('name') or "").strip()
+        description = (request.form.get('description') or "").strip()
+
+        if code and name:
+            # Intentar crear una nueva sección
+            cur.execute("""
+                INSERT OR IGNORE INTO sections (code, name, description)
+                VALUES (?, ?, ?)
+            """, (code, name, description))
+            conn.commit()
+
+    sections = cur.execute(
+        "SELECT * FROM sections ORDER BY name;"
+    ).fetchall()
+
+    conn.close()
+    return render_template('admin_sections.html', sections=sections)
+
+
+@app.route('/admin/sections/<int:section_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_section(section_id):
+    """Editar una máquina/sección existente (nombre y descripción)."""
+    conn = get_db()
+    cur = conn.cursor()
+
+    section = cur.execute(
+        "SELECT * FROM sections WHERE id = ?;",
+        (section_id,)
+    ).fetchone()
+
+    if not section:
+        conn.close()
+        return f"Sección no encontrada (ID {section_id})", 404
+
+    if request.method == 'POST':
+        name = (request.form.get('name') or "").strip()
+        description = (request.form.get('description') or "").strip()
+
+        if name:
+            cur.execute("""
+                UPDATE sections
+                SET name = ?, description = ?
+                WHERE id = ?
+            """, (name, description, section_id))
+            conn.commit()
+            conn.close()
+            return redirect(url_for('admin_sections'))
+
+    conn.close()
+    return render_template('admin_edit_section.html', section=section)
+
+
+@app.route('/admin/issues')
+@admin_required
+def admin_issues():
+    """Listado de avisos de desperfecto pendientes y resueltos."""
+    conn = get_db()
+    cur = conn.cursor()
+
+    pendientes = cur.execute("""
         SELECT w.*, s.name as section_name, t.name as technician_name
         FROM work_orders w
         JOIN sections s ON w.section_id = s.id
@@ -549,11 +593,9 @@ def admin_issues():
         WHERE w.type = 'Aviso de desperfecto'
           AND (w.resolved IS NULL OR w.resolved = 0)
         ORDER BY w.date DESC;
-        """
-    ).fetchall()
+    """).fetchall()
 
-    resueltos = cur.execute(
-        """
+    resueltos = cur.execute("""
         SELECT w.*, s.name as section_name, t.name as technician_name
         FROM work_orders w
         JOIN sections s ON w.section_id = s.id
@@ -562,105 +604,105 @@ def admin_issues():
           AND w.resolved = 1
         ORDER BY w.date DESC
         LIMIT 50;
-        """
-    ).fetchall()
+    """).fetchall()
 
     conn.close()
-    return render_template(
-        "admin_issues.html",
-        pendientes=pendientes,
-        resueltos=resueltos,
-    )
+    return render_template('admin_issues.html',
+                           pendientes=pendientes,
+                           resueltos=resueltos)
 
 
-@app.route("/admin/issues/<int:issue_id>/resolver", methods=["GET", "POST"])
+@app.route('/admin/issues/<int:issue_id>/resolver', methods=['GET', 'POST'])
 @admin_required
 def admin_resolve_issue(issue_id):
-    """Marcar un aviso de desperfecto como resuelto + evidencia."""
+    """Marcar un aviso de desperfecto como solucionado y subir evidencia."""
     conn = get_db()
     cur = conn.cursor()
 
-    issue = cur.execute(
-        """
+    issue = cur.execute("""
         SELECT w.*, s.name as section_name, t.name as technician_name
         FROM work_orders w
         JOIN sections s ON w.section_id = s.id
         LEFT JOIN technicians t ON w.technician_id = t.id
         WHERE w.id = ?
-        """,
-        (issue_id,),
-    ).fetchone()
+    """, (issue_id,)).fetchone()
+
     if not issue:
         conn.close()
         return f"Aviso no encontrado (ID {issue_id})", 404
 
-    if request.method == "POST":
-        resolution_description = request.form.get("resolution_description")
-        now = datetime.now().isoformat(timespec="minutes")
+    if request.method == 'POST':
+        resolution_description = request.form.get('resolution_description')
+        now = datetime.now().isoformat(timespec='minutes')
 
-        cur.execute(
-            """
+        # Marcar como resuelto
+        cur.execute("""
             UPDATE work_orders
             SET resolved = 1,
                 resolution_description = ?,
                 resolution_at = ?
             WHERE id = ?
-            """,
-            (resolution_description, now, issue_id),
-        )
+        """, (resolution_description, now, issue_id))
 
-        files = request.files.getlist("attachments")
+        # Guardar archivos de evidencia
+        files = request.files.getlist('attachments')
         for f in files:
             if f and f.filename:
                 filename = f.filename
-                save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
                 base, ext = os.path.splitext(filename)
                 i = 1
                 while os.path.exists(save_path):
                     filename = f"{base}_{i}{ext}"
-                    save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     i += 1
 
                 f.save(save_path)
 
-                cur.execute(
-                    """
+                cur.execute("""
                     INSERT INTO attachments
                     (work_order_id, filename, mime_type, path, created_at)
                     VALUES (?,?,?,?,?)
-                    """,
-                    (issue_id, filename, f.mimetype, save_path, now),
-                )
+                """, (issue_id, filename, f.mimetype, save_path, now))
 
         conn.commit()
         conn.close()
-        return redirect(url_for("admin_issues"))
+        return redirect(url_for('admin_issues'))
 
     conn.close()
-    return render_template("admin_resolve_issue.html", issue=issue)
+    return render_template('admin_resolve_issue.html', issue=issue)
 
 
-# -------------------- API para generar QR --------------------
-@app.route("/api/sections")
+# -----------------------------------------
+#  API PARA GENERAR QR DESDE SCRIPT LOCAL
+# -----------------------------------------
+@app.route('/api/sections')
 def api_sections():
-    """API simple para que tu script local genere QR desde la BD."""
+    """Devuelve una lista JSON de máquinas/secciones para generar QR."""
     key = request.args.get("key")
-    if key != "123456":  # misma key que usas en generate_qr_from_api.py
+    # La API key debe coincidir con la del script local
+    if key != "123456":
         return {"error": "unauthorized"}, 401
 
     conn = get_db()
     cur = conn.cursor()
-    sections = cur.execute(
-        "SELECT id, code, name, description FROM sections ORDER BY name;"
-    ).fetchall()
+
+    sections = cur.execute("""
+        SELECT id, code, name, description
+        FROM sections
+        ORDER BY name
+    """).fetchall()
+
     conn.close()
 
     return [dict(row) for row in sections]
 
 
-# -------------------- Main local --------------------
-if __name__ == "__main__":
+# -----------------------------------------
+#  EJECUCIÓN LOCAL
+# -----------------------------------------
+if __name__ == '__main__':
     init_db()
     seed_data()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
