@@ -41,10 +41,21 @@
             <p><b>Técnico:</b> {{ w['technician_name'] or 'No registrado' }}</p>
             <p>
                 {% if w['type'] %}
-                    <span class="tag">{{ w['type'] }}</span>
+                    <span class="tag">
+                        {{ w['type'] }}
+                    </span>
                 {% endif %}
+
                 {% if w['component'] %}
                     <span class="tag">Parte: {{ w['component'] }}</span>
+                {% endif %}
+
+                {% if w['type'] == 'Aviso de desperfecto' %}
+                    {% if w['resolved'] %}
+                        <span class="tag" style="background:#c8e6c9;">✅ Desperfecto resuelto</span>
+                    {% else %}
+                        <span class="tag" style="background:#ffcdd2;">⚠ Desperfecto pendiente</span>
+                    {% endif %}
                 {% endif %}
             </p>
             <p><b>Descripción:</b> {{ w['description'] }}</p>
@@ -52,6 +63,10 @@
                 <b>Línea detenida:</b> {{ 'Sí' if w['machine_stopped'] else 'No' }}<br>
                 <b>Minutos de parada:</b> {{ w['downtime_min'] or 0 }}
             </p>
+            {% if w['resolution_description'] %}
+                <p><b>Cómo se resolvió:</b> {{ w['resolution_description'] }}</p>
+                <p><b>Resuelto en:</b> {{ w['resolution_at'] or '-' }}</p>
+            {% endif %}
         </div>
     {% endfor %}
 
