@@ -231,7 +231,7 @@ def admin_required(f):
 # -----------------------------------------
 #  PORTAL PRINCIPAL (QR UNIVERSAL)
 # -----------------------------------------
-@app.route('/')
+@app.route('/', endpoint='index')
 def home_portal():
     """
     Portal principal del QR universal.
@@ -999,3 +999,4 @@ if __name__ == '__main__':
     init_db()
     seed_data()
     app.run(host='0.0.0.0', port=5000, debug=True)
+
