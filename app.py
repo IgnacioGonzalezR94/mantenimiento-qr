@@ -517,6 +517,26 @@ def admin_edit_section(section_id):
     conn.close()
     return render_template('admin_edit_section.html', section=section)
 
+@app.route('/api/sections')
+def api_sections():
+    """Devuelve una lista JSON de máquinas/secciones para generar QR."""
+    key = request.args.get("key")
+    if key != "123456":
+        return {"error": "unauthorized"}, 401
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    sections = cur.execute("""
+        SELECT id, code, name, description
+        FROM sections
+        ORDER BY name
+    """).fetchall()
+
+    conn.close()
+
+    return [dict(row) for row in sections]
+
 
 @app.route('/admin/issues')
 @admin_required
@@ -621,4 +641,5 @@ if __name__ == '__main__':
     init_db()
     seed_data()
     app.run(host='0.0.0.0', port=5000, debug=True)
+
 
