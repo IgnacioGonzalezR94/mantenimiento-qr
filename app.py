@@ -14,11 +14,14 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# Clave para sesiones (modo admin). Cámbiala por algo tuyo.
+# Clave para sesiones (admin, etc.)
 app.secret_key = os.environ.get("SECRET_KEY", "cambia-esta-clave-super-secreta")
 
-# Contraseña del modo admin (para /admin). Cámbiala también.
+# Contraseña del modo admin (/admin)
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1234")
+
+# Contraseña para que el técnico pueda registrar trabajos y solicitar repuestos
+TECHNICIAN_PASSWORD = os.environ.get("TECH_PASSWORD", "9999")
 
 # Carpeta donde se guardan fotos y videos
 UPLOAD_FOLDER = 'uploads'
@@ -44,7 +47,7 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    # Tabla de secciones (lo que tiene QR)
+    # Tabla de secciones (máquinas / módulos con QR)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +67,7 @@ def init_db():
     );
     """)
 
-    # Tabla de órdenes de trabajo
+    # Tabla de órdenes de trabajo (mantenimientos / avisos)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS work_orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,6 +76,7 @@ def init_db():
         date TEXT NOT NULL,
         type TEXT,
         component TEXT,
+        failure_type TEXT,
         description TEXT NOT NULL,
         downtime_min INTEGER,
         machine_stopped INTEGER,
@@ -88,6 +92,7 @@ def init_db():
     # Asegurar columnas nuevas por si la tabla ya existía con menos campos
     alter_statements = [
         "ALTER TABLE work_orders ADD COLUMN component TEXT;",
+        "ALTER TABLE work_orders ADD COLUMN failure_type TEXT;",
         "ALTER TABLE work_orders ADD COLUMN resolved INTEGER DEFAULT 0;",
         "ALTER TABLE work_orders ADD COLUMN resolution_description TEXT;",
         "ALTER TABLE work_orders ADD COLUMN resolution_at TEXT;"
@@ -109,7 +114,7 @@ def init_db():
     );
     """)
 
-    # Tabla de archivos adjuntos
+    # Tabla de archivos adjuntos de órdenes de trabajo
     cur.execute("""
     CREATE TABLE IF NOT EXISTS attachments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,6 +127,41 @@ def init_db():
     );
     """)
 
+    # Tabla de solicitudes de repuestos (Modo "Otros")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS spare_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        section_id INTEGER,
+        technician_id INTEGER,
+        date TEXT NOT NULL,
+        part_name TEXT,
+        description TEXT,
+        photo_path TEXT,
+        photo_filename TEXT,
+        photo_mime TEXT,
+        status TEXT DEFAULT 'pendiente',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(section_id) REFERENCES sections(id),
+        FOREIGN KEY(technician_id) REFERENCES technicians(id)
+    );
+    """)
+
+    # Tabla de solicitudes de ayuda (Modo "Ayuda")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS help_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        name TEXT,
+        contact TEXT,
+        description TEXT NOT NULL,
+        photo_path TEXT,
+        photo_filename TEXT,
+        photo_mime TEXT,
+        status TEXT DEFAULT 'pendiente',
+        created_at TEXT NOT NULL
+    );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -131,7 +171,7 @@ def seed_data():
     conn = get_db()
     cur = conn.cursor()
 
-    # Secciones de la máquina KATO
+    # Secciones de la máquina KATO (puedes borrarlas luego y crear las tuyas)
     sections = [
         ("VOLCADOR", "Volcador", "Volcador de fruta / bins"),
         ("ELEVADOR", "Elevador de fruta", "Elevador desde volcador a acumulación"),
@@ -150,7 +190,7 @@ def seed_data():
             VALUES (?, ?, ?)
         """, (code, name, desc))
 
-    # Técnicos iniciales (puedes cambiar estos nombres por los de tu equipo)
+    # Técnicos iniciales
     technicians = [
         ("Walker", "Técnico"),
         ("Jose", "Técnico"),
@@ -171,7 +211,7 @@ def seed_data():
     print("✅ Datos iniciales cargados (seed_data)")
 
 
-# Inicializar BD al cargar el módulo (sirve local y en Render)
+# Inicializar BD al cargar el módulo
 init_db()
 seed_data()
 
@@ -189,29 +229,54 @@ def admin_required(f):
 
 
 # -----------------------------------------
-#  RUTAS PARA TÉCNICOS (USO NORMAL)
+#  PORTAL PRINCIPAL (QR UNIVERSAL)
 # -----------------------------------------
 @app.route('/')
-def index():
-    """Página principal: lista todas las secciones."""
+def home_portal():
+    """
+    Portal principal del QR universal.
+    Muestra los 7 botones: técnico, visualización, otros, informe,
+    perfil técnico, admin, ayuda.
+    """
+    return render_template('home_portal.html')
+
+
+# -----------------------------------------
+#  LISTAS BÁSICAS (secciones / técnicos)
+# -----------------------------------------
+def get_all_sections():
     conn = get_db()
-    sections = conn.execute("SELECT * FROM sections ORDER BY name;").fetchall()
+    cur = conn.cursor()
+    sections = cur.execute(
+        "SELECT * FROM sections ORDER BY name;"
+    ).fetchall()
     conn.close()
+    return sections
 
-    # Si no hay secciones por alguna razón, resembramos
-    if not sections:
-        init_db()
-        seed_data()
-        conn = get_db()
-        sections = conn.execute("SELECT * FROM sections ORDER BY name;").fetchall()
-        conn.close()
 
-    return render_template('index.html', sections=sections)
+def get_all_technicians():
+    conn = get_db()
+    cur = conn.cursor()
+    technicians = cur.execute(
+        "SELECT * FROM technicians ORDER BY name;"
+    ).fetchall()
+    conn.close()
+    return technicians
+
+
+# -----------------------------------------
+#  MODO TÉCNICO (REGISTRAR MANTENIMIENTOS)
+# -----------------------------------------
+@app.route('/modo/tecnico')
+def modo_tecnico():
+    """Página donde el técnico elige la máquina y entra a registrar mantenimiento."""
+    sections = get_all_sections()
+    return render_template('modo_tecnico.html', sections=sections)
 
 
 @app.route('/m/<section_code>')
 def section_view(section_code):
-    """Vista de una sección específica (cuando escanean el QR)."""
+    """Vista de una sección específica (historial)."""
     conn = get_db()
     section = conn.execute(
         "SELECT * FROM sections WHERE code = ?;",
@@ -228,11 +293,29 @@ def section_view(section_code):
         LEFT JOIN technicians t ON w.technician_id = t.id
         WHERE w.section_id = ?
         ORDER BY w.date DESC
-        LIMIT 20;
+        LIMIT 50;
+    """, (section['id'],)).fetchall()
+
+    # Adjuntos por orden de trabajo
+    attachments_rows = conn.execute("""
+        SELECT * FROM attachments
+        WHERE work_order_id IN (
+            SELECT id FROM work_orders WHERE section_id = ?
+        )
     """, (section['id'],)).fetchall()
 
     conn.close()
-    return render_template('section.html', section=section, work_orders=work_orders)
+
+    attachments_by_work = {}
+    for a in attachments_rows:
+        attachments_by_work.setdefault(a['work_order_id'], []).append(a)
+
+    return render_template(
+        'section.html',
+        section=section,
+        work_orders=work_orders,
+        attachments_by_work=attachments_by_work
+    )
 
 
 @app.route('/m/<section_code>/nuevo', methods=['GET', 'POST'])
@@ -252,16 +335,24 @@ def new_work_order(section_code):
         "SELECT * FROM technicians WHERE active = 1 ORDER BY name;"
     ).fetchall()
 
-    # Subpartes configurables de esta sección
     components = conn.execute(
         "SELECT * FROM components WHERE section_code = ? AND active = 1 ORDER BY name;",
         (section_code,)
     ).fetchall()
 
+    error = None
+
     if request.method == 'POST':
+        # Verificar contraseña de técnico
+        tech_password = request.form.get('tech_password')
+        if tech_password != TECHNICIAN_PASSWORD:
+            conn.close()
+            return "Contraseña de técnico incorrecta.", 403
+
         technician_id = request.form.get('technician_id') or None
         type_work = request.form.get('type')
         component = request.form.get('component')  # subparte elegida
+        failure_type = request.form.get('failure_type')
         description = request.form.get('description')
         downtime_min = request.form.get('downtime_min') or 0
         machine_stopped = 1 if request.form.get('machine_stopped') == 'on' else 0
@@ -277,15 +368,16 @@ def new_work_order(section_code):
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO work_orders
-            (section_id, technician_id, date, type, component, description,
-             downtime_min, machine_stopped, created_at, resolved)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+            (section_id, technician_id, date, type, component, failure_type,
+             description, downtime_min, machine_stopped, created_at, resolved)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (
             section['id'],
             technician_id,
             now,
             type_work,
             component,
+            failure_type,
             description,
             int(downtime_min),
             machine_stopped,
@@ -332,18 +424,256 @@ def new_work_order(section_code):
         'new_work_order.html',
         section=section,
         technicians=technicians,
-        components=components
+        components=components,
+        error=error
     )
 
 
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    """Servir archivos subidos (fotos/videos)."""
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+# -----------------------------------------
+#  MODO VISUALIZACIÓN (SOLO LECTURA)
+# -----------------------------------------
+@app.route('/modo/visualizacion')
+def modo_visualizacion():
+    """Cualquier persona puede ver el historial de la máquina que elija."""
+    sections = get_all_sections()
+    return render_template('modo_visualizacion.html', sections=sections)
 
 
 # -----------------------------------------
-#  MODO ADMINISTRADOR
+#  MODO OTROS (SOLICITUD DE REPUESTOS)
+# -----------------------------------------
+@app.route('/modo/otros', methods=['GET', 'POST'])
+def modo_otros():
+    """
+    El técnico solicita repuestos:
+    - Elige máquina
+    - Describe repuesto
+    - Sube foto
+    - Ingresa contraseña de técnico
+    """
+    sections = get_all_sections()
+    technicians = get_all_technicians()
+
+    if request.method == 'POST':
+        tech_password = request.form.get('tech_password')
+        if tech_password != TECHNICIAN_PASSWORD:
+            return "Contraseña de técnico incorrecta para solicitar repuesto.", 403
+
+        section_id = request.form.get('section_id') or None
+        technician_id = request.form.get('technician_id') or None
+        part_name = request.form.get('part_name')
+        description = request.form.get('description')
+
+        now = datetime.now().isoformat(timespec='minutes')
+
+        photo = request.files.get('photo')
+        photo_path = None
+        photo_filename = None
+        photo_mime = None
+
+        if photo and photo.filename:
+            photo_filename = photo.filename
+            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_filename)
+            base, ext = os.path.splitext(photo_filename)
+            i = 1
+            while os.path.exists(photo_path):
+                photo_filename = f"{base}_{i}{ext}"
+                photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_filename)
+                i += 1
+            photo.save(photo_path)
+            photo_mime = photo.mimetype
+
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO spare_requests
+            (section_id, technician_id, date, part_name, description,
+             photo_path, photo_filename, photo_mime, status, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (
+            section_id,
+            technician_id,
+            now,
+            part_name,
+            description,
+            photo_path,
+            photo_filename,
+            photo_mime,
+            "pendiente",
+            now
+        ))
+        conn.commit()
+        conn.close()
+
+        return render_template('modo_otros_ok.html')
+
+    return render_template('modo_otros.html',
+                           sections=sections,
+                           technicians=technicians)
+
+
+# -----------------------------------------
+#  MODO INFORME (HISTORIAL POR RANGO DE FECHAS)
+# -----------------------------------------
+@app.route('/modo/informe', methods=['GET', 'POST'])
+def modo_informe():
+    """
+    Cualquier persona puede ver el historial completo filtrando por:
+    - rango de fechas
+    - máquina
+    Y luego usar "Imprimir / guardar como PDF" desde el navegador.
+    """
+    sections = get_all_sections()
+    resultados = []
+    filtros = {}
+
+    if request.method == 'POST':
+        section_id = request.form.get('section_id') or None
+        start_date = request.form.get('start_date') or ""
+        end_date = request.form.get('end_date') or ""
+
+        filtros = {
+            "section_id": section_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+
+        conn = get_db()
+        cur = conn.cursor()
+
+        query = """
+            SELECT w.*, s.name as section_name, t.name as technician_name
+            FROM work_orders w
+            JOIN sections s ON w.section_id = s.id
+            LEFT JOIN technicians t ON w.technician_id = t.id
+            WHERE 1=1
+        """
+        params = []
+
+        if section_id:
+            query += " AND w.section_id = ?"
+            params.append(section_id)
+
+        if start_date:
+            query += " AND w.date >= ?"
+            params.append(start_date + "T00:00")
+
+        if end_date:
+            query += " AND w.date <= ?"
+            params.append(end_date + "T23:59")
+
+        query += " ORDER BY w.date DESC;"
+
+        resultados = cur.execute(query, params).fetchall()
+        conn.close()
+
+    return render_template('modo_informe.html',
+                           sections=sections,
+                           resultados=resultados,
+                           filtros=filtros)
+
+
+# -----------------------------------------
+#  MODO PERFIL TÉCNICO
+# -----------------------------------------
+@app.route('/modo/perfil-tecnico')
+def modo_perfil_tecnico():
+    """Lista de técnicos para ver sus trabajos."""
+    technicians = get_all_technicians()
+    return render_template('modo_perfil_tecnico.html', technicians=technicians)
+
+
+@app.route('/modo/perfil-tecnico/<int:tech_id>')
+def modo_perfil_tecnico_detalle(tech_id):
+    """Trabajos realizados por un técnico específico."""
+    conn = get_db()
+    cur = conn.cursor()
+
+    tech = cur.execute(
+        "SELECT * FROM technicians WHERE id = ?;",
+        (tech_id,)
+    ).fetchone()
+
+    if not tech:
+        conn.close()
+        return f"Técnico no encontrado (ID {tech_id})", 404
+
+    work_orders = cur.execute("""
+        SELECT w.*, s.name as section_name
+        FROM work_orders w
+        JOIN sections s ON w.section_id = s.id
+        WHERE w.technician_id = ?
+        ORDER BY w.date DESC
+        LIMIT 100;
+    """, (tech_id,)).fetchall()
+
+    conn.close()
+    return render_template('modo_perfil_tecnico_detalle.html',
+                           technician=tech,
+                           work_orders=work_orders)
+
+
+# -----------------------------------------
+#  MODO AYUDA
+# -----------------------------------------
+@app.route('/modo/ayuda', methods=['GET', 'POST'])
+def modo_ayuda():
+    """
+    Cualquier persona puede subir una foto y registrar un problema general.
+    No requiere contraseña.
+    """
+    if request.method == 'POST':
+        name = request.form.get('name')
+        contact = request.form.get('contact')
+        description = request.form.get('description')
+
+        now = datetime.now().isoformat(timespec='minutes')
+
+        photo = request.files.get('photo')
+        photo_path = None
+        photo_filename = None
+        photo_mime = None
+
+        if photo and photo.filename:
+            photo_filename = photo.filename
+            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_filename)
+            base, ext = os.path.splitext(photo_filename)
+            i = 1
+            while os.path.exists(photo_path):
+                photo_filename = f"{base}_{i}{ext}"
+                photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_filename)
+                i += 1
+            photo.save(photo_path)
+            photo_mime = photo.mimetype
+
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO help_requests
+            (date, name, contact, description,
+             photo_path, photo_filename, photo_mime, status, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (
+            now,
+            name,
+            contact,
+            description,
+            photo_path,
+            photo_filename,
+            photo_mime,
+            "pendiente",
+            now
+        ))
+        conn.commit()
+        conn.close()
+
+        return render_template('modo_ayuda_ok.html')
+
+    return render_template('modo_ayuda.html')
+
+
+# -----------------------------------------
+#  ADMIN: LOGIN / LOGOUT / HOME
 # -----------------------------------------
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -365,20 +695,23 @@ def admin_login():
 def admin_logout():
     """Salir del modo admin."""
     session.pop('is_admin', None)
-    return redirect(url_for('index'))
+    return redirect(url_for('home_portal'))
 
 
 @app.route('/admin')
 @admin_required
 def admin_home():
     """Menú principal del modo administrador."""
-    conn = get_db()
-    sections = conn.execute("SELECT * FROM sections ORDER BY name;").fetchall()
-    technicians = conn.execute("SELECT * FROM technicians ORDER BY name;").fetchall()
-    conn.close()
-    return render_template('admin_home.html', sections=sections, technicians=technicians)
+    sections = get_all_sections()
+    technicians = get_all_technicians()
+    return render_template('admin_home.html',
+                           sections=sections,
+                           technicians=technicians)
 
 
+# -----------------------------------------
+#  ADMIN: TÉCNICOS
+# -----------------------------------------
 @app.route('/admin/technicians', methods=['GET', 'POST'])
 @admin_required
 def admin_technicians():
@@ -386,7 +719,7 @@ def admin_technicians():
     conn = get_db()
     cur = conn.cursor()
 
-    # Desactivar técnico (soft delete)
+    # Desactivar técnico
     deactivate_id = request.args.get('deactivate_id')
     if deactivate_id:
         cur.execute("UPDATE technicians SET active = 0 WHERE id = ?;", (deactivate_id,))
@@ -410,52 +743,9 @@ def admin_technicians():
     return render_template('admin_technicians.html', technicians=technicians)
 
 
-@app.route('/admin/components/<section_code>', methods=['GET', 'POST'])
-@admin_required
-def admin_components(section_code):
-    """Configurar subpartes de una sección (sub-clasificaciones del QR)."""
-    conn = get_db()
-    cur = conn.cursor()
-
-    section = cur.execute(
-        "SELECT * FROM sections WHERE code = ?;",
-        (section_code,)
-    ).fetchone()
-    if not section:
-        conn.close()
-        return f"Sección no encontrada: {section_code}", 404
-
-    # Desactivar subparte
-    deactivate_id = request.args.get('deactivate_id')
-    if deactivate_id:
-        cur.execute(
-            "UPDATE components SET active = 0 WHERE id = ?;",
-            (deactivate_id,)
-        )
-        conn.commit()
-
-    if request.method == 'POST':
-        name = request.form.get('name')
-        if name:
-            cur.execute("""
-                INSERT INTO components (section_code, name, active)
-                VALUES (?, ?, 1)
-            """, (section_code, name))
-            conn.commit()
-
-    components = cur.execute("""
-        SELECT * FROM components
-        WHERE section_code = ?
-        ORDER BY active DESC, name;
-    """, (section_code,)).fetchall()
-
-    conn.close()
-    return render_template(
-        'admin_components.html',
-        section=section,
-        components=components
-    )
-
+# -----------------------------------------
+#  ADMIN: MÁQUINAS / SECCIONES
+# -----------------------------------------
 @app.route('/admin/sections', methods=['GET', 'POST'])
 @admin_required
 def admin_sections():
@@ -469,7 +759,6 @@ def admin_sections():
         description = (request.form.get('description') or "").strip()
 
         if code and name:
-            # Intentar crear una nueva sección
             cur.execute("""
                 INSERT OR IGNORE INTO sections (code, name, description)
                 VALUES (?, ?, ?)
@@ -517,27 +806,60 @@ def admin_edit_section(section_id):
     conn.close()
     return render_template('admin_edit_section.html', section=section)
 
-@app.route('/api/sections')
-def api_sections():
-    """Devuelve una lista JSON de máquinas/secciones para generar QR."""
-    key = request.args.get("key")
-    if key != "123456":
-        return {"error": "unauthorized"}, 401
 
+# -----------------------------------------
+#  ADMIN: SUBPARTES (COMPONENTES) POR SECCIÓN
+# -----------------------------------------
+@app.route('/admin/components/<section_code>', methods=['GET', 'POST'])
+@admin_required
+def admin_components(section_code):
+    """Configurar subpartes de una sección (sub-clasificaciones del QR)."""
     conn = get_db()
     cur = conn.cursor()
 
-    sections = cur.execute("""
-        SELECT id, code, name, description
-        FROM sections
-        ORDER BY name
-    """).fetchall()
+    section = cur.execute(
+        "SELECT * FROM sections WHERE code = ?;",
+        (section_code,)
+    ).fetchone()
+    if not section:
+        conn.close()
+        return f"Sección no encontrada: {section_code}", 404
+
+    # Desactivar subparte
+    deactivate_id = request.args.get('deactivate_id')
+    if deactivate_id:
+        cur.execute(
+            "UPDATE components SET active = 0 WHERE id = ?;",
+            (deactivate_id,)
+        )
+        conn.commit()
+
+    if request.method == 'POST':
+        name = request.form.get('name')
+        if name:
+            cur.execute("""
+                INSERT INTO components (section_code, name, active)
+                VALUES (?, ?, 1)
+            """, (section_code, name))
+            conn.commit()
+
+    components = cur.execute("""
+        SELECT * FROM components
+        WHERE section_code = ?
+        ORDER BY active DESC, name;
+    """, (section_code,)).fetchall()
 
     conn.close()
+    return render_template(
+        'admin_components.html',
+        section=section,
+        components=components
+    )
 
-    return [dict(row) for row in sections]
 
-
+# -----------------------------------------
+#  ADMIN: AVISOS DE DESPERFECTO
+# -----------------------------------------
 @app.route('/admin/issues')
 @admin_required
 def admin_issues():
@@ -604,27 +926,31 @@ def admin_resolve_issue(issue_id):
             WHERE id = ?
         """, (resolution_description, now, issue_id))
 
-        # Guardar archivos de evidencia
+        # Guardar evidencia en attachments
         files = request.files.getlist('attachments')
         for f in files:
             if f and f.filename:
                 filename = f.filename
                 save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
                 base, ext = os.path.splitext(filename)
                 i = 1
                 while os.path.exists(save_path):
                     filename = f"{base}_{i}{ext}"
                     save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     i += 1
-
                 f.save(save_path)
 
                 cur.execute("""
                     INSERT INTO attachments
                     (work_order_id, filename, mime_type, path, created_at)
                     VALUES (?,?,?,?,?)
-                """, (issue_id, filename, f.mimetype, save_path, now))
+                """, (
+                    issue_id,
+                    filename,
+                    f.mimetype,
+                    save_path,
+                    now
+                ))
 
         conn.commit()
         conn.close()
@@ -635,11 +961,41 @@ def admin_resolve_issue(issue_id):
 
 
 # -----------------------------------------
+#  API PARA GENERAR QRS (OPCIONAL)
+# -----------------------------------------
+@app.route('/api/sections')
+def api_sections():
+    """Devuelve una lista JSON de máquinas/secciones para generar QR por código."""
+    key = request.args.get("key")
+    if key != "123456":
+        return {"error": "unauthorized"}, 401
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    sections = cur.execute("""
+        SELECT id, code, name, description
+        FROM sections
+        ORDER BY name
+    """).fetchall()
+
+    conn.close()
+    return [dict(row) for row in sections]
+
+
+# -----------------------------------------
+#  SERVIR ARCHIVOS SUBIDOS
+# -----------------------------------------
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    """Servir archivos subidos (fotos/videos)."""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+# -----------------------------------------
 #  EJECUCIÓN LOCAL
 # -----------------------------------------
 if __name__ == '__main__':
     init_db()
     seed_data()
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-
