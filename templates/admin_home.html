@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Panel administrador</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        h2 { color: #0b3c5d; }
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #dde3ed;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        a { color: #0b6fa4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        ul { padding-left: 18px; }
+    </style>
+</head>
+<body>
+
+    <h1>🛠 Panel administrador</h1>
+    <p>Aquí puedes gestionar técnicos y subpartes de cada sección.</p>
+
+    <div class="card">
+        <h2>👷 Técnicos</h2>
+        <p><a href="{{ url_for('admin_technicians') }}">Gestionar técnicos (agregar / desactivar)</a></p>
+        <ul>
+            {% for t in technicians %}
+                <li>{{ t['name'] }} {% if not t['active'] %}(inactivo){% endif %}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>🔩 Secciones y subpartes</h2>
+        <p>Haz clic en una sección para configurar sus subpartes (componentes específicos que el técnico podrá elegir).</p>
+        <ul>
+            {% for s in sections %}
+                <li>
+                    <a href="{{ url_for('admin_components', section_code=s['code']) }}">
+                        {{ s['name'] }} ({{ s['code'] }})
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <p><a href="{{ url_for('admin_logout') }}">Cerrar sesión admin</a></p>
+    <p><a href="{{ url_for('index') }}">⬅ Volver al modo técnico</a></p>
+
+</body>
+</html>
