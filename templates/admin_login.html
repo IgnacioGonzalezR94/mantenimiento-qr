@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Login administrador</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        .box {
+            max-width: 400px;
+            margin: 50px auto;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #dde3ed;
+        }
+        h1 { color: #0b3c5d; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button {
+            margin-top: 15px;
+            background: #0b6fa4;
+            color: white;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background: #084d73; }
+        .error { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>🔐 Modo administrador</h1>
+        <p>Ingresa la contraseña para gestionar técnicos y partes.</p>
+
+        <form method="post">
+            <label>Contraseña:</label>
+            <input type="password" name="password" required>
+            <button type="submit">Entrar</button>
+        </form>
+
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>
