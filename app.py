@@ -20,12 +20,12 @@ app.secret_key = os.environ.get("SECRET_KEY", "cambia-esta-clave-super-secreta")
 # Contraseña del modo admin (para /admin). Cámbiala también.
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1234")
 
-# Carpeta donde se guardan fotos y videos (solo local)
+# Carpeta donde se guardan fotos y videos
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Archivo de la base de datos (Render y local usan este nombre)
+# Archivo de la base de datos
 DATABASE = 'db.sqlite3'
 
 
@@ -40,7 +40,7 @@ def get_db():
 
 
 def init_db():
-    """Crea las tablas si no existen."""
+    """Crea las tablas si no existen y asegura columnas nuevas."""
     conn = get_db()
     cur = conn.cursor()
 
@@ -72,21 +72,32 @@ def init_db():
         technician_id INTEGER,
         date TEXT NOT NULL,
         type TEXT,
+        component TEXT,
         description TEXT NOT NULL,
         downtime_min INTEGER,
         machine_stopped INTEGER,
         created_at TEXT NOT NULL,
-        component TEXT,
+        resolved INTEGER DEFAULT 0,
+        resolution_description TEXT,
+        resolution_at TEXT,
         FOREIGN KEY(section_id) REFERENCES sections(id),
         FOREIGN KEY(technician_id) REFERENCES technicians(id)
     );
     """)
 
-    # Asegurar columna 'component' (por si la tabla ya existía)
-    try:
-        cur.execute("ALTER TABLE work_orders ADD COLUMN component TEXT;")
-    except sqlite3.OperationalError:
-        pass
+    # Asegurar columnas nuevas por si la tabla ya existía con menos campos
+    alter_statements = [
+        "ALTER TABLE work_orders ADD COLUMN component TEXT;",
+        "ALTER TABLE work_orders ADD COLUMN resolved INTEGER DEFAULT 0;",
+        "ALTER TABLE work_orders ADD COLUMN resolution_description TEXT;",
+        "ALTER TABLE work_orders ADD COLUMN resolution_at TEXT;"
+    ]
+    for stmt in alter_statements:
+        try:
+            cur.execute(stmt)
+        except sqlite3.OperationalError:
+            # La columna ya existe: ignorar
+            pass
 
     # Tabla de subpartes / componentes configurables por sección
     cur.execute("""
@@ -95,6 +106,19 @@ def init_db():
         section_code TEXT NOT NULL,
         name TEXT NOT NULL,
         active INTEGER DEFAULT 1
+    );
+    """)
+
+    # Tabla de archivos adjuntos
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS attachments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        work_order_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        mime_type TEXT,
+        path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(work_order_id) REFERENCES work_orders(id)
     );
     """)
 
@@ -242,14 +266,20 @@ def new_work_order(section_code):
         downtime_min = request.form.get('downtime_min') or 0
         machine_stopped = 1 if request.form.get('machine_stopped') == 'on' else 0
 
+        # Estado según tipo
+        if type_work == "Aviso de desperfecto":
+            resolved = 0
+        else:
+            resolved = 1
+
         now = datetime.now().isoformat(timespec='minutes')
 
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO work_orders
             (section_id, technician_id, date, type, component, description,
-             downtime_min, machine_stopped, created_at)
-            VALUES (?,?,?,?,?,?,?,?,?)
+             downtime_min, machine_stopped, created_at, resolved)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
         """, (
             section['id'],
             technician_id,
@@ -259,12 +289,12 @@ def new_work_order(section_code):
             description,
             int(downtime_min),
             machine_stopped,
-            now
+            now,
+            resolved
         ))
         work_order_id = cur.lastrowid
 
-        # Manejo de archivos adjuntos (solo funciona local, en Render habría que
-        # usar almacenamiento externo, pero dejamos la lógica base)
+        # Manejo de archivos adjuntos
         files = request.files.getlist('attachments')
         for f in files:
             if f and f.filename:
@@ -425,6 +455,102 @@ def admin_components(section_code):
         section=section,
         components=components
     )
+
+
+@app.route('/admin/issues')
+@admin_required
+def admin_issues():
+    """Listado de avisos de desperfecto pendientes y resueltos."""
+    conn = get_db()
+    cur = conn.cursor()
+
+    pendientes = cur.execute("""
+        SELECT w.*, s.name as section_name, t.name as technician_name
+        FROM work_orders w
+        JOIN sections s ON w.section_id = s.id
+        LEFT JOIN technicians t ON w.technician_id = t.id
+        WHERE w.type = 'Aviso de desperfecto'
+          AND (w.resolved IS NULL OR w.resolved = 0)
+        ORDER BY w.date DESC;
+    """).fetchall()
+
+    resueltos = cur.execute("""
+        SELECT w.*, s.name as section_name, t.name as technician_name
+        FROM work_orders w
+        JOIN sections s ON w.section_id = s.id
+        LEFT JOIN technicians t ON w.technician_id = t.id
+        WHERE w.type = 'Aviso de desperfecto'
+          AND w.resolved = 1
+        ORDER BY w.date DESC
+        LIMIT 50;
+    """).fetchall()
+
+    conn.close()
+    return render_template('admin_issues.html',
+                           pendientes=pendientes,
+                           resueltos=resueltos)
+
+
+@app.route('/admin/issues/<int:issue_id>/resolver', methods=['GET', 'POST'])
+@admin_required
+def admin_resolve_issue(issue_id):
+    """Marcar un aviso de desperfecto como solucionado y subir evidencia."""
+    conn = get_db()
+    cur = conn.cursor()
+
+    issue = cur.execute("""
+        SELECT w.*, s.name as section_name, t.name as technician_name
+        FROM work_orders w
+        JOIN sections s ON w.section_id = s.id
+        LEFT JOIN technicians t ON w.technician_id = t.id
+        WHERE w.id = ?
+    """, (issue_id,)).fetchone()
+
+    if not issue:
+        conn.close()
+        return f"Aviso no encontrado (ID {issue_id})", 404
+
+    if request.method == 'POST':
+        resolution_description = request.form.get('resolution_description')
+        now = datetime.now().isoformat(timespec='minutes')
+
+        # Marcar como resuelto
+        cur.execute("""
+            UPDATE work_orders
+            SET resolved = 1,
+                resolution_description = ?,
+                resolution_at = ?
+            WHERE id = ?
+        """, (resolution_description, now, issue_id))
+
+        # Guardar archivos de evidencia
+        files = request.files.getlist('attachments')
+        for f in files:
+            if f and f.filename:
+                filename = f.filename
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+                base, ext = os.path.splitext(filename)
+                i = 1
+                while os.path.exists(save_path):
+                    filename = f"{base}_{i}{ext}"
+                    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    i += 1
+
+                f.save(save_path)
+
+                cur.execute("""
+                    INSERT INTO attachments
+                    (work_order_id, filename, mime_type, path, created_at)
+                    VALUES (?,?,?,?,?)
+                """, (issue_id, filename, f.mimetype, save_path, now))
+
+        conn.commit()
+        conn.close()
+        return redirect(url_for('admin_issues'))
+
+    conn.close()
+    return render_template('admin_resolve_issue.html', issue=issue)
 
 
 # -----------------------------------------
