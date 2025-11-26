@@ -44,7 +44,12 @@
         </select>
 
         <label>Tipo de trabajo:</label>
-        <input type="text" name="type" placeholder="correctivo, preventivo, ajuste...">
+        <select name="type" required>
+            <option value="Mantenimiento preventivo">Mantenimiento preventivo</option>
+            <option value="Mantenimiento correctivo">Mantenimiento correctivo</option>
+            <option value="Aviso de desperfecto">Aviso de desperfecto</option>
+        </select>
+        <span class="hint">Si es solo un aviso de fallo, el sistema lo marcará como pendiente hasta que alguien lo resuelva.</span>
 
         <label>Parte específica de esta sección:</label>
         <select name="component">
@@ -57,7 +62,7 @@
         </select>
         <span class="hint">Ejemplos: motor derecho, sensor entrada, banda 1, etc. (se configuran en modo admin).</span>
 
-        <label>Descripción detallada del trabajo:</label>
+        <label>Descripción detallada del trabajo / aviso:</label>
         <textarea name="description" rows="5" required></textarea>
 
         <label>¿Se detuvo la línea?</label>
@@ -69,7 +74,7 @@
         <label>Adjuntar fotos o videos (puedes seleccionar varios):</label>
         <input type="file" name="attachments" multiple>
 
-        <button type="submit">Guardar mantenimiento</button>
+        <button type="submit">Guardar</button>
     </form>
 
     <p style="margin-top: 15px;">
