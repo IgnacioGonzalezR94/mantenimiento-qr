@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Administrar técnicos</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #dde3ed; padding: 8px; text-align: left; }
+        th { background: #eef2fb; }
+        .inactive { color: #999; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button {
+            margin-top: 10px;
+            background: #0b6fa4;
+            color: white;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background: #084d73; }
+    </style>
+</head>
+<body>
+
+    <h1>👷 Administrar técnicos</h1>
+
+    <h2>Agregar nuevo técnico</h2>
+    <form method="post">
+        <label>Nombre:</label>
+        <input type="text" name="name" required>
+
+        <label>Rol (opcional):</label>
+        <input type="text" name="role" placeholder="Técnico, supervisor, etc.">
+
+        <button type="submit">Agregar</button>
+    </form>
+
+    <h2>Listado de técnicos</h2>
+    <table>
+        <tr>
+            <th>Nombre</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+        </tr>
+        {% for t in technicians %}
+            <tr>
+                <td class="{% if not t['active'] %}inactive{% endif %}">
+                    {{ t['name'] }}
+                </td>
+                <td class="{% if not t['active'] %}inactive{% endif %}">
+                    {{ t['role'] or '' }}
+                </td>
+                <td>
+                    {% if t['active'] %}Activo{% else %}Inactivo{% endif %}
+                </td>
+                <td>
+                    {% if t['active'] %}
+                        <a href="{{ url_for('admin_technicians', deactivate_id=t['id']) }}">Desactivar</a>
+                    {% else %}
+                        (desactivado)
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <p><a href="{{ url_for('admin_home') }}">⬅ Volver al panel admin</a></p>
+
+</body>
+</html>
