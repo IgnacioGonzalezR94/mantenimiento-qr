@@ -22,7 +22,7 @@
 <body>
 
     <h1>🛠 Panel administrador</h1>
-    <p>Aquí puedes gestionar técnicos y subpartes de cada sección.</p>
+    <p>Aquí puedes gestionar técnicos, máquinas/secciones, subpartes y avisos.</p>
 
     <div class="card">
         <h2>👷 Técnicos</h2>
@@ -35,7 +35,17 @@
     </div>
 
     <div class="card">
-        <h2>🔩 Secciones y subpartes</h2>
+        <h2>🏭 Máquinas / secciones</h2>
+        <p><a href="{{ url_for('admin_sections') }}">Agregar nuevas máquinas / secciones y editar las existentes</a></p>
+        <ul>
+            {% for s in sections %}
+                <li>{{ s['name'] }} ({{ s['code'] }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>🔩 Subpartes por sección</h2>
         <p>Haz clic en una sección para configurar sus subpartes (componentes específicos que el técnico podrá elegir).</p>
         <ul>
             {% for s in sections %}
