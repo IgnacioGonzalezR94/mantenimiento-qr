@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Modo técnico</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding:20px; background:#f4f6fb; }
+        h1 { color:#0b3c5d; }
+        ul { list-style:none; padding:0; }
+        li {
+            margin-bottom:8px;
+            padding:8px 10px;
+            background:white;
+            border-radius:8px;
+            border:1px solid #dde3ed;
+        }
+        a { text-decoration:none; color:#0b6fa4; font-weight:bold; }
+        a:hover { text-decoration:underline; }
+    </style>
+</head>
+<body>
+
+    <h1>🧰 Modo técnico</h1>
+    <p>Selecciona la máquina/sección donde vas a registrar el mantenimiento.</p>
+
+    <ul>
+        {% for s in sections %}
+            <li>
+                <a href="{{ url_for('new_work_order', section_code=s['code']) }}">
+                    {{ s['name'] }} ({{ s['code'] }})
+                </a>
+                {% if s['description'] %}
+                    <div style="font-size:12px;color:#777;">{{ s['description'] }}</div>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+
+    <p><a href="{{ url_for('home_portal') }}">⬅ Volver al portal</a></p>
+
+</body>
+</html>
