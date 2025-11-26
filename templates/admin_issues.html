@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title> Avisos de desperfecto </title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        h2 { color: #0b3c5d; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }
+        th, td { border: 1px solid #dde3ed; padding: 8px; text-align: left; }
+        th { background: #eef2fb; }
+        .pendiente { background: #ffebee; }
+        .resuelto { background: #e8f5e9; }
+        a { color: #0b6fa4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <h1>⚠ Avisos de desperfecto</h1>
+
+    <h2>Pendientes</h2>
+    {% if pendientes|length == 0 %}
+        <p>No hay avisos pendientes. 👌</p>
+    {% else %}
+        <table>
+            <tr>
+                <th>Fecha</th>
+                <th>Sección</th>
+                <th>Parte</th>
+                <th>Técnico</th>
+                <th>Descripción</th>
+                <th>Acciones</th>
+            </tr>
+            {% for w in pendientes %}
+                <tr class="pendiente">
+                    <td>{{ w['date'] }}</td>
+                    <td>{{ w['section_name'] }}</td>
+                    <td>{{ w['component'] or '-' }}</td>
+                    <td>{{ w['technician_name'] or '-' }}</td>
+                    <td>{{ w['description'] }}</td>
+                    <td>
+                        <a href="{{ url_for('admin_resolve_issue', issue_id=w['id']) }}">Marcar como resuelto</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+
+    <h2>Resueltos (últimos 50)</h2>
+    {% if resueltos|length == 0 %}
+        <p>Todavía no hay avisos resueltos.</p>
+    {% else %}
+        <table>
+            <tr>
+                <th>Fecha aviso</th>
+                <th>Sección</th>
+                <th>Parte</th>
+                <th>Resuelto en</th>
+                <th>Descripción aviso</th>
+                <th>Cómo se resolvió</th>
+            </tr>
+            {% for w in resueltos %}
+                <tr class="resuelto">
+                    <td>{{ w['date'] }}</td>
+                    <td>{{ w['section_name'] }}</td>
+                    <td>{{ w['component'] or '-' }}</td>
+                    <td>{{ w['resolution_at'] or '-' }}</td>
+                    <td>{{ w['description'] }}</td>
+                    <td>{{ w['resolution_description'] or '-' }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+
+    <p><a href="{{ url_for('admin_home') }}">⬅ Volver al panel admin</a></p>
+
+</body>
+</html>
