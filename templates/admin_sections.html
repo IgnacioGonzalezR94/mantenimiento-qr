@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Máquinas / secciones</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        h2 { color: #0b3c5d; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            margin-top: 10px;
+            background: #0b6fa4;
+            color: white;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background: #084d73; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #dde3ed; padding: 8px; text-align: left; }
+        th { background: #eef2fb; }
+    </style>
+</head>
+<body>
+
+    <h1>🏭 Máquinas / secciones</h1>
+    <p>Aquí puedes crear nuevas máquinas o secciones que tendrán su propio QR.</p>
+
+    <h2>Agregar nueva máquina / sección</h2>
+    <form method="post">
+        <label>Código (para el QR):</label>
+        <input type="text" name="code" placeholder="Ej: VOLCADOR2, LÍNEA3_VOLCADOR" required>
+
+        <label>Nombre visible:</label>
+        <input type="text" name="name" placeholder="Ej: Volcador línea 2" required>
+
+        <label>Descripción (opcional):</label>
+        <textarea name="description" rows="3"></textarea>
+
+        <button type="submit">Agregar máquina / sección</button>
+    </form>
+
+    <h2>Listado actual</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Acciones</th>
+        </tr>
+        {% for s in sections %}
+            <tr>
+                <td>{{ s['id'] }}</td>
+                <td>{{ s['code'] }}</td>
+                <td>{{ s['name'] }}</td>
+                <td>{{ s['description'] or '' }}</td>
+                <td>
+                    <a href="{{ url_for('admin_edit_section', section_id=s['id']) }}">Editar</a>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <p><a href="{{ url_for('admin_home') }}">⬅ Volver al panel admin</a></p>
+
+</body>
+</html>
