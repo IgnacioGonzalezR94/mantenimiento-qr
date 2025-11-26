@@ -4,23 +4,24 @@
     <meta charset="utf-8">
     <title>{{ section['name'] }} - Mantenimiento</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        h1 { color: #004070; }
-        a { color: #0066cc; text-decoration: none; font-weight: bold; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6fb; }
+        h1 { color: #0b3c5d; }
+        a { color: #0b6fa4; text-decoration: none; font-weight: bold; }
         a:hover { text-decoration: underline; }
         .card {
-            border: 1px solid #ccc;
+            border: 1px solid #dde3ed;
             padding: 15px;
             margin-bottom: 15px;
             border-radius: 8px;
-            background: #f9f9f9;
+            background: #ffffff;
         }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #e3f2fd; margin-right: 5px; }
     </style>
 </head>
 <body>
 
-    <h1>{{ section['name'] }}</h1>
-    <p><b>Código:</b> {{ section['code'] }}</p>
+    <h1>🔧 {{ section['name'] }}</h1>
+    <p><b>Código QR:</b> {{ section['code'] }}</p>
 
     <p>
         <a href="{{ url_for('new_work_order', section_code=section['code']) }}">
@@ -28,17 +29,24 @@
         </a>
     </p>
 
-    <h2>Últimos mantenimientos</h2>
+    <h2>📜 Historial reciente</h2>
 
     {% if work_orders|length == 0 %}
-        <p>No hay mantenimientos registrados aún.</p>
+        <p>Aún no hay mantenimientos registrados en esta sección.</p>
     {% endif %}
 
     {% for w in work_orders %}
         <div class="card">
             <p><b>Fecha:</b> {{ w['date'] }}</p>
             <p><b>Técnico:</b> {{ w['technician_name'] or 'No registrado' }}</p>
-            <p><b>Tipo:</b> {{ w['type'] or 'N/D' }}</p>
+            <p>
+                {% if w['type'] %}
+                    <span class="tag">{{ w['type'] }}</span>
+                {% endif %}
+                {% if w['component'] %}
+                    <span class="tag">Parte: {{ w['component'] }}</span>
+                {% endif %}
+            </p>
             <p><b>Descripción:</b> {{ w['description'] }}</p>
             <p>
                 <b>Línea detenida:</b> {{ 'Sí' if w['machine_stopped'] else 'No' }}<br>
@@ -48,7 +56,7 @@
     {% endfor %}
 
     <p>
-        <a href="{{ url_for('index') }}">⬅ Volver</a>
+        <a href="{{ url_for('index') }}">⬅ Volver al inicio</a>
     </p>
 
 </body>
