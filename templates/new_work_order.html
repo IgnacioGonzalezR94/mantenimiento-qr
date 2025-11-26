@@ -26,12 +26,17 @@
             background: #084d73;
         }
         .hint { font-size: 12px; color: #666; }
+        .error { color:red; margin-top:10px; }
     </style>
 </head>
 <body>
 
     <h1>✏ Registrar mantenimiento en {{ section['name'] }}</h1>
-    <p class="hint">Paso 1: completa los datos · Paso 2: sube fotos si es necesario · Paso 3: Guarda.</p>
+    <p class="hint">Recuerda ingresar la contraseña de técnico para guardar el reporte.</p>
+
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
 
     <form method="post" enctype="multipart/form-data">
 
@@ -49,7 +54,15 @@
             <option value="Mantenimiento correctivo">Mantenimiento correctivo</option>
             <option value="Aviso de desperfecto">Aviso de desperfecto</option>
         </select>
-        <span class="hint">Si es solo un aviso de fallo, el sistema lo marcará como pendiente hasta que alguien lo resuelva.</span>
+
+        <label>Tipo de falla:</label>
+        <select name="failure_type" required>
+            <option value="Falla mecánica">Falla mecánica</option>
+            <option value="Falla eléctrica">Falla eléctrica</option>
+            <option value="Falla software">Falla software</option>
+            <option value="Falla hardware">Falla hardware</option>
+            <option value="Otros">Otros</option>
+        </select>
 
         <label>Parte específica de esta sección:</label>
         <select name="component">
@@ -60,7 +73,7 @@
                 {% endif %}
             {% endfor %}
         </select>
-        <span class="hint">Ejemplos: motor derecho, sensor entrada, banda 1, etc. (se configuran en modo admin).</span>
+        <span class="hint">Ej: motor derecho, sensor entrada, banda 1... (configurado en modo admin).</span>
 
         <label>Descripción detallada del trabajo / aviso:</label>
         <textarea name="description" rows="5" required></textarea>
@@ -73,6 +86,9 @@
 
         <label>Adjuntar fotos o videos (puedes seleccionar varios):</label>
         <input type="file" name="attachments" multiple>
+
+        <label>Contraseña técnico:</label>
+        <input type="password" name="tech_password" required>
 
         <button type="submit">Guardar</button>
     </form>
